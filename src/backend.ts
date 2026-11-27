@@ -25,23 +25,25 @@ spindle.commands.register([
 ])
 
 async function pickRandomCharacter(excludeId?: string) {
-  const probe = await spindle.characters.list({ limit: 1, offset: 0 })
-  const total: number = probe?.total ?? 0
+  const firstPage = await spindle.characters.list({ limit: 200, offset: 0 })
+  const total: number = firstPage?.total ?? firstPage?.data?.length ?? 0
 
   if (total === 0) return null
 
-  let offset = Math.floor(Math.random() * total)
-  let page = await spindle.characters.list({ limit: 1, offset })
-  let chosen = page?.data?.[0] ?? null
+  let pool: any[] = firstPage?.data ?? []
 
-  // If we landed on the currently open character and there are others, re-roll once
-  if (chosen && excludeId && chosen.id === excludeId && total > 1) {
-    offset = (offset + 1 + Math.floor(Math.random() * (total - 1))) % total
-    page = await spindle.characters.list({ limit: 1, offset })
-    chosen = page?.data?.[0] ?? chosen
+  // If you have more than 200 characters, pick a random offset across the full total
+  if (total > pool.length) {
+    const offset = Math.floor(Math.random() * total)
+    const page = await spindle.characters.list({ limit: 1, offset })
+    return page?.data?.[0] ?? pool[0] ?? null
   }
 
-  return chosen
+  if (excludeId && pool.length > 1) {
+    pool = pool.filter((c) => c.id !== excludeId)
+  }
+
+  return pool[Math.floor(Math.random() * pool.length)] ?? null
 }
 
 spindle.commands.onInvoked(async (commandId: string, context: CommandContext) => {
@@ -70,8 +72,9 @@ spindle.commands.onInvoked(async (commandId: string, context: CommandContext) =>
       mode,
     })
   } catch (err: any) {
-    spindle.log.error(`Random Character failed: ${err?.message ?? err}`)
-    spindle.toast.error('Failed to pick a random character.')
+    const msg = err?.message ?? String(err)
+    spindle.log.error(`Random Character failed: ${msg}`)
+    spindle.toast.error(`Pick failed: ${msg}`, { duration: 10000 })
   }
 })
 
@@ -79,7 +82,7 @@ spindle.onFrontendMessage((payload: any) => {
   if (payload?.type === 'random_character_opened') {
     spindle.toast.success(`Picked ${payload.characterName}!`)
   } else if (payload?.type === 'random_character_error') {
-    spindle.toast.error(payload.message || 'Could not open character chat.')
+    spindle.toast.error(`Open failed: ${payload.message || 'Unknown error'}`, { duration: 10000 })
   }
 })
 

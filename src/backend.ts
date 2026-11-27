@@ -10,6 +10,12 @@ interface CommandContext {
 
 let lastKnownUserId: string | undefined
 
+function extractUserId(val: any): string | undefined {
+  if (typeof val === 'string' && val.length > 0) return val
+  if (val && typeof val === 'object' && typeof val.userId === 'string') return val.userId
+  return undefined
+}
+
 spindle.commands.register([
   {
     id: 'random-character-latest',
@@ -38,7 +44,6 @@ async function pickRandomCharacter(userId?: string, excludeId?: string) {
 
   let pool: any[] = firstPage?.data ?? []
 
-  // If you have more than 200 characters, pick a random offset across the full total
   if (total > pool.length) {
     const offset = Math.floor(Math.random() * total)
     const pageOpts: any = { limit: 1, offset }
@@ -54,12 +59,19 @@ async function pickRandomCharacter(userId?: string, excludeId?: string) {
   return pool[Math.floor(Math.random() * pool.length)] ?? null
 }
 
-spindle.commands.onInvoked(async (commandId: string, context: CommandContext, invokedUserId?: string) => {
+spindle.commands.onInvoked(async (commandId: string, context: CommandContext, arg3?: any) => {
   if (commandId !== 'random-character-latest' && commandId !== 'random-character-new') {
     return
   }
 
-  const userId = invokedUserId || context?.userId || lastKnownUserId
+  const userId =
+    extractUserId(arg3) ||
+    extractUserId(context?.userId) ||
+    extractUserId(lastKnownUserId)
+
+  spindle.log.info(
+    `[debug] userId=${JSON.stringify(userId)} | arg3=${JSON.stringify(arg3)} | ctxUserId=${JSON.stringify(context?.userId)} | last=${JSON.stringify(lastKnownUserId)}`
+  )
 
   if (!spindle.permissions.has('characters')) {
     spindle.toast.warning('Grant the "characters" permission in Extensions settings first.', userId ? { userId } : undefined)
@@ -91,15 +103,16 @@ spindle.commands.onInvoked(async (commandId: string, context: CommandContext, in
   }
 })
 
-spindle.onFrontendMessage((payload: any, userId?: string) => {
-  if (userId) lastKnownUserId = userId
+spindle.onFrontendMessage((payload: any, userId?: any) => {
+  const uid = extractUserId(userId)
+  if (uid) lastKnownUserId = uid
 
   if (payload?.type === 'random_character_opened') {
-    spindle.toast.success(`Picked ${payload.characterName}!`, userId ? { userId } : undefined)
+    spindle.toast.success(`Picked ${payload.characterName}!`, uid ? { userId: uid } : undefined)
   } else if (payload?.type === 'random_character_error') {
     spindle.toast.error(`Open failed: ${payload.message || 'Unknown error'}`, {
       duration: 10000,
-      ...(userId ? { userId } : {}),
+      ...(uid ? { userId: uid } : {}),
     })
   }
 })

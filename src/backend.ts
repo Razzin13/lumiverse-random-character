@@ -59,33 +59,21 @@ async function pickRandomCharacter(userId?: string, excludeId?: string) {
   return pool[Math.floor(Math.random() * pool.length)] ?? null
 }
 
-spindle.commands.onInvoked(async (commandId: string, context: CommandContext, arg3?: any) => {
-  if (commandId !== 'random-character-latest' && commandId !== 'random-character-new') {
-    return
-  }
-
-  const userId =
-    extractUserId(arg3) ||
-    extractUserId(context?.userId) ||
-    extractUserId(lastKnownUserId)
-
-  spindle.log.info(
-    `[debug] userId=${JSON.stringify(userId)} | arg3=${JSON.stringify(arg3)} | ctxUserId=${JSON.stringify(context?.userId)} | last=${JSON.stringify(lastKnownUserId)}`
-  )
-
+async function runRandomPick(mode: 'latest' | 'new', userId?: string, excludeId?: string) {
   if (!spindle.permissions.has('characters')) {
-    spindle.toast.warning('Grant the "characters" permission in Extensions settings first.', userId ? { userId } : undefined)
+    spindle.toast.warning(
+      'Grant the "characters" permission in Extensions settings first.',
+      userId ? { userId } : undefined
+    )
     return
   }
 
   try {
-    const chosen = await pickRandomCharacter(userId, context?.characterId)
+    const chosen = await pickRandomCharacter(userId, excludeId)
     if (!chosen) {
       spindle.toast.info('No characters found in your library.', userId ? { userId } : undefined)
       return
     }
-
-    const mode = commandId === 'random-character-new' ? 'new' : 'latest'
 
     spindle.sendToFrontend(
       {
@@ -101,11 +89,31 @@ spindle.commands.onInvoked(async (commandId: string, context: CommandContext, ar
     spindle.log.error(`Random Character failed: ${msg}`)
     spindle.toast.error(`Pick failed: ${msg}`, { duration: 10000, ...(userId ? { userId } : {}) })
   }
+}
+
+spindle.commands.onInvoked(async (commandId: string, context: CommandContext, arg3?: any) => {
+  if (commandId !== 'random-character-latest' && commandId !== 'random-character-new') {
+    return
+  }
+
+  const userId =
+    extractUserId(arg3) ||
+    extractUserId(context?.userId) ||
+    extractUserId(lastKnownUserId)
+
+  const mode = commandId === 'random-character-new' ? 'new' : 'latest'
+  await runRandomPick(mode, userId, context?.characterId)
 })
 
-spindle.onFrontendMessage((payload: any, userId?: any) => {
+spindle.onFrontendMessage(async (payload: any, userId?: any) => {
   const uid = extractUserId(userId)
   if (uid) lastKnownUserId = uid
+
+  if (payload?.type === 'roll_random_character') {
+    const mode = payload.mode === 'new' ? 'new' : 'latest'
+    await runRandomPick(mode, uid || lastKnownUserId)
+    return
+  }
 
   if (payload?.type === 'random_character_opened') {
     spindle.toast.success(`Picked ${payload.characterName}!`, uid ? { userId: uid } : undefined)

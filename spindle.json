@@ -1,1 +1,11 @@
-
+{
+  "version": "1.0.0",
+  "name": "Random Character",
+  "identifier": "random_character",
+  "author": "Razzin",
+  "github": "https://github.com/Razzin13/lumiverse-random-character",
+  "description": "Pick a random character from your library via the Command Palette (Ctrl+K / Cmd+K).",
+  "permissions": ["characters", "chats"],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js"
+}

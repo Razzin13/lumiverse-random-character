@@ -1,4 +1,7 @@
 export function setup(ctx: any) {
+  // Let the backend capture the active userId for operator-scoped installs
+  ctx.sendToBackend({ type: 'hello' })
+
   const unsub = ctx.onBackendMessage(async (payload: any) => {
     if (payload?.type !== 'open_random_character') return
 
@@ -23,7 +26,6 @@ export function setup(ctx: any) {
           { characterId, mode }
         )
       } else {
-        // Fallback for older hosts: open the character's page
         await surfaces.invoke(
           { kind: 'route', id: '/characters/:id' },
           { id: characterId }
